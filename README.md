@@ -76,11 +76,22 @@ rm -rf ~/.claude/semaphore-tray ~/.claude/semaphore
 
 ## Known quirks
 
-- A brief red flash can appear when Claude's permission classifier evaluates
-  a command it then auto-allows; it self-corrects on the next tool event.
+- Red for permission dialogs triggers primarily on the `PermissionRequest`
+  hook, which fires the instant a dialog is about to appear — including in
+  the VS Code extension's native UI, which [never delivers `Notification`
+  hook events](https://github.com/anthropics/claude-code/issues/31285). In
+  auto-like permission modes the event is ignored (it can fire for calls the
+  classifier then allows without a dialog,
+  [#29212](https://github.com/anthropics/claude-code/issues/29212)); those
+  modes fall back to the `Notification` hook, which terminals deliver after
+  a ~6 s idle gate.
+- Red is sticky against `PostToolUse`: tools started in parallel before a
+  dialog appeared may finish while it waits, and their completion must not
+  flip the light back to orange. Red clears on the next tool start, new
+  prompt, answered question, denial, or end of turn.
 - If Claude ends its turn by asking a question in plain text (no dialog), the
   light shows green first and turns red when the idle "waiting for your
-  input" notification fires (~1 min).
+  input" notification fires (~1 min, terminal sessions only).
 - During a long-running command no hook events fire, so a background session
   finishing meanwhile can briefly show green; red always wins regardless.
 

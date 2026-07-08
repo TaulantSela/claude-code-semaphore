@@ -2,8 +2,10 @@
 # claude-semaphore state hook — writes per-session traffic-light state files
 # consumed by the claude-semaphore tray app.
 #
-# Usage: state.sh <working|pre|attention|done|end>
-# Claude Code delivers the hook event JSON on stdin.
+# Usage: state.sh <action-hint>
+# Claude Code delivers the hook event JSON on stdin. The event name embedded
+# in the JSON (hook_event_name) takes precedence over the argv hint, so
+# behavior updates apply even to sessions that captured an older hooks.json.
 #
 # States: red = Claude needs your input, orange = working/idle, green = finished.
 #
@@ -16,7 +18,7 @@ mkdir -p "$STATE_DIR"
 INPUT=$(cat 2>/dev/null)
 
 # Extract a top-level string field from single-line hook JSON. Good enough
-# for session_id/tool_name; not a general JSON parser.
+# for our fields; not a general JSON parser.
 json_field() {
   printf '%s' "$INPUT" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1
 }
@@ -27,23 +29,64 @@ FILE="$STATE_DIR/$SESSION"
 
 set_state() { printf '%s\n' "$1" > "$FILE"; }
 
-case "$1" in
+EVENT=$(json_field hook_event_name)
+TOOL=$(json_field tool_name)
+
+# Map to an action: prefer the real event name, fall back to the argv hint.
+case "$EVENT" in
+  SessionStart|UserPromptSubmit|PermissionDenied|ElicitationResult) ACTION=working ;;
+  PreToolUse)        ACTION=pre ;;
+  PostToolUse)       ACTION=post ;;
+  PermissionRequest) ACTION=permreq ;;
+  Notification|Elicitation) ACTION=attention ;;
+  Stop)              ACTION=done ;;
+  SessionEnd)        ACTION=end ;;
+  *)                 ACTION="$1" ;;
+esac
+
+case "$ACTION" in
   working)
     set_state orange
     ;;
   pre)
     # AskUserQuestion means Claude is showing a question dialog — that is
-    # "waiting on you", not "working".
-    if [ "$(json_field tool_name)" = "AskUserQuestion" ]; then
+    # "waiting on you", not "working". Any other new tool call proves the
+    # turn is unblocked, so it may clear a stale red.
+    if [ "$TOOL" = "AskUserQuestion" ]; then
       set_state red
     else
       set_state orange
     fi
     ;;
+  post)
+    # While a permission dialog is pending the turn cannot START new tools,
+    # but tools launched earlier in parallel can still FINISH. Their
+    # completion must not downgrade red — except AskUserQuestion completing,
+    # which means the user just answered.
+    if [ "$(cat "$FILE" 2>/dev/null)" = "red" ] && [ "$TOOL" != "AskUserQuestion" ]; then
+      :
+    else
+      set_state orange
+    fi
+    ;;
+  permreq)
+    # A permission dialog is about to be shown — the primary red trigger.
+    # It fires immediately and works in frontends that never deliver
+    # Notification events (e.g. the VS Code extension's native UI).
+    # In auto-like permission modes this event can also fire for tool calls
+    # the classifier then allows WITHOUT showing a dialog (a documented
+    # discrepancy, github.com/anthropics/claude-code/issues/29212), which
+    # would flash false reds — so only trust it in dialog-showing modes.
+    case "$(json_field permission_mode)" in
+      auto|acceptEdits|bypassPermissions|dontAsk) : ;;
+      *) set_state red ;;
+    esac
+    ;;
   attention)
-    # The periodic idle "waiting for your input" notification must not
-    # downgrade an already-finished (green) session back to red.
-    if [ "$(cat "$FILE" 2>/dev/null)" = "green" ] && printf '%s' "$INPUT" | grep -qi 'waiting for your input'; then
+    # Notification ("Claude needs your permission…", idle prompts) and MCP
+    # elicitation dialogs. The periodic idle "waiting for your input"
+    # notification must not downgrade an already-finished (green) session.
+    if [ "$(cat "$FILE" 2>/dev/null)" = "green" ] && printf '%s' "$(json_field message)" | grep -qi 'waiting for your input'; then
       :
     else
       set_state red
