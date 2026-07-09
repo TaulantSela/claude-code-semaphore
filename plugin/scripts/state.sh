@@ -83,14 +83,27 @@ case "$ACTION" in
     esac
     ;;
   attention)
-    # Notification ("Claude needs your permission…", idle prompts) and MCP
-    # elicitation dialogs. The periodic idle "waiting for your input"
-    # notification must not downgrade an already-finished (green) session.
-    if [ "$(cat "$FILE" 2>/dev/null)" = "green" ] && printf '%s' "$(json_field message)" | grep -qi 'waiting for your input'; then
-      :
-    else
-      set_state red
-    fi
+    # Notifications carry a notification_type; only some types mean
+    # "waiting on you". Elicitation events (no type field) fall through to
+    # the default branch and turn red.
+    case "$(json_field notification_type)" in
+      auth_success|agent_completed)
+        : ;;
+      elicitation_complete|elicitation_response)
+        set_state orange ;;
+      idle_prompt)
+        # Don't downgrade a finished (green) session for the idle reminder;
+        # it does catch turns that ended with a plain-text question (orange).
+        [ "$(cat "$FILE" 2>/dev/null)" = "green" ] || set_state red ;;
+      *)
+        # permission_prompt, elicitation_dialog, agent_needs_input, or an
+        # older CLI without notification_type: legacy message-text guard.
+        if [ "$(cat "$FILE" 2>/dev/null)" = "green" ] && printf '%s' "$(json_field message)" | grep -qi 'waiting for your input'; then
+          :
+        else
+          set_state red
+        fi ;;
+    esac
     ;;
   done)
     set_state green
