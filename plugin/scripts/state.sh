@@ -73,12 +73,13 @@ case "$ACTION" in
     # A permission dialog is about to be shown — the primary red trigger.
     # It fires immediately and works in frontends that never deliver
     # Notification events (e.g. the VS Code extension's native UI).
-    # In auto-like permission modes this event can also fire for tool calls
-    # the classifier then allows WITHOUT showing a dialog (a documented
-    # discrepancy, github.com/anthropics/claude-code/issues/29212), which
-    # would flash false reds — so only trust it in dialog-showing modes.
+    # Verified empirically: allowlisted and sandbox-auto-approved calls do
+    # NOT fire this event, and acceptEdits mode auto-approves only edits —
+    # its other tool calls show real dialogs. Only skip modes that never
+    # show a dialog, plus auto mode, where the classifier's evaluation can
+    # fire this without a dialog (github.com/anthropics/claude-code/29212).
     case "$(json_field permission_mode)" in
-      auto|acceptEdits|bypassPermissions|dontAsk) : ;;
+      auto|bypassPermissions|dontAsk) : ;;
       *) set_state red ;;
     esac
     ;;
