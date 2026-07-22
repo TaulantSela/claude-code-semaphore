@@ -5,7 +5,7 @@
 
 set -u
 
-REPO="TaulantSela/claude-code-semaphore"
+REPO="TaulantSela/claude-semaphore"
 BIN_DIR="$HOME/.claude/semaphore-tray"
 STATE_DIR="$HOME/.claude/semaphore"
 mkdir -p "$BIN_DIR" "$STATE_DIR" 2>/dev/null

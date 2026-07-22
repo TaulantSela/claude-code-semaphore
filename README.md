@@ -24,8 +24,8 @@ hide your fresh green.
 Inside Claude Code:
 
 ```
-/plugin marketplace add TaulantSela/claude-code-semaphore
-/plugin install semaphore@claude-code-semaphore
+/plugin marketplace add TaulantSela/claude-semaphore
+/plugin install semaphore@claude-semaphore
 ```
 
 Start a new Claude Code session and the traffic light appears in your tray
@@ -54,7 +54,7 @@ for 12 hours are ignored, so crashed sessions can't wedge the light.
 ## Uninstall
 
 ```
-/plugin uninstall semaphore@claude-code-semaphore
+/plugin uninstall semaphore@claude-semaphore
 ```
 
 Then remove the app pieces:

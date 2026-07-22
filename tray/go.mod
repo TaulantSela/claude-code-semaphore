@@ -1,4 +1,4 @@
-module github.com/TaulantSela/claude-code-semaphore/tray
+module github.com/TaulantSela/claude-semaphore/tray
 
 go 1.26.5
 

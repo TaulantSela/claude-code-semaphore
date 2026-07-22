@@ -6,7 +6,7 @@
   "author": {
     "name": "Taulant Sela"
   },
-  "repository": "https://github.com/TaulantSela/claude-code-semaphore",
+  "repository": "https://github.com/TaulantSela/claude-semaphore",
   "license": "MIT",
   "keywords": ["tray", "menubar", "status", "traffic-light", "productivity"]
 }
