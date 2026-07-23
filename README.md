@@ -15,6 +15,10 @@ Claude Semaphore tells you at a glance:
 | 🟢 | **Task finished** — come back and collect |
 | ⚪️ | No active Claude sessions |
 
+The active states animate so you can catch them from the corner of your eye:
+🔴 beats like a heart with a soft glow until you respond, 🟠 gently breathes
+while Claude works, and 🟢 / ⚪️ stay still.
+
 Multiple sessions? Any session that needs you wins (red); otherwise the most
 recently active session decides, so an idle window from this morning can't
 hide your fresh green.

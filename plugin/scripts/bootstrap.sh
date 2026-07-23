@@ -25,15 +25,69 @@ esac
 
 BIN="$BIN_DIR/claude-semaphore"
 [ "$OS" = windows ] && BIN="$BIN.exe"
+VERFILE="$BIN_DIR/.version"
+PLIST="$HOME/Library/LaunchAgents/com.claude-semaphore.plist"
 
-# 1. Download the tray binary on first run.
-if [ ! -x "$BIN" ]; then
+# The plugin version, read from the manifest beside this script. The binary is
+# tagged with it so a plugin update also pulls a matching tray binary.
+WANT_VER=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+  "$(dirname "$0")/../.claude-plugin/plugin.json" 2>/dev/null | head -1)
+HAVE_VER=$(cat "$VERFILE" 2>/dev/null)
+
+# 1. Download the tray binary on first run, or refresh it when the plugin
+#    version changed — so updating the plugin also updates the binary, instead
+#    of leaving an old tray in place forever (it was only ever fetched once).
+if [ ! -x "$BIN" ] || { [ -n "$WANT_VER" ] && [ "$WANT_VER" != "$HAVE_VER" ]; }; then
+  UPDATING=0
+  [ -x "$BIN" ] && UPDATING=1
+
+  # Stop the running tray so its file can be replaced (mandatory on Windows,
+  # where a running .exe is locked) and the new binary can take over.
+  if [ "$UPDATING" = 1 ]; then
+    case "$OS" in
+      windows) taskkill //F //IM "$(basename "$BIN")" >/dev/null 2>&1 ;;
+      *)       pkill -f "$BIN" 2>/dev/null ;;
+    esac
+    sleep 1
+  fi
+
   ASSET="claude-semaphore-$OS-$ARCH"
   [ "$OS" = windows ] && ASSET="$ASSET.exe"
-  URL="https://github.com/$REPO/releases/latest/download/$ASSET"
-  curl -fsSL --retry 2 -o "$BIN.tmp" "$URL" 2>/dev/null || { rm -f "$BIN.tmp"; exit 0; }
-  chmod +x "$BIN.tmp" 2>/dev/null
-  mv "$BIN.tmp" "$BIN" 2>/dev/null || exit 0
+
+  # Prefer the asset tagged with the plugin version so binary and hooks match;
+  # fall back to the latest release if that tag has no asset yet.
+  GOT=""
+  if [ -n "$WANT_VER" ] &&
+     curl -fsSL --retry 2 -o "$BIN.tmp" \
+       "https://github.com/$REPO/releases/download/v$WANT_VER/$ASSET" 2>/dev/null &&
+     [ -s "$BIN.tmp" ]; then
+    GOT="$WANT_VER"
+  elif curl -fsSL --retry 2 -o "$BIN.tmp" \
+       "https://github.com/$REPO/releases/latest/download/$ASSET" 2>/dev/null &&
+     [ -s "$BIN.tmp" ]; then
+    GOT="latest"
+  fi
+
+  if [ -n "$GOT" ]; then
+    chmod +x "$BIN.tmp" 2>/dev/null
+    if mv "$BIN.tmp" "$BIN" 2>/dev/null; then
+      # Record the version only when we got the exact one asked for, so a
+      # latest-fallback keeps trying for the pinned build next session.
+      [ "$GOT" = "$WANT_VER" ] && printf '%s' "$WANT_VER" > "$VERFILE" 2>/dev/null
+      # macOS: a launchd job pins a code requirement to the binary it was first
+      # bootstrapped with and kills a replaced binary with OS_REASON_CODESIGNING.
+      # Re-bootstrap so the requirement re-derives from the new binary.
+      if [ "$UPDATING" = 1 ] && [ "$OS" = darwin ] && [ -f "$PLIST" ]; then
+        launchctl bootout "gui/$(id -u)/com.claude-semaphore" 2>/dev/null
+        launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null
+      fi
+    else
+      rm -f "$BIN.tmp"
+    fi
+  else
+    rm -f "$BIN.tmp"
+    [ "$UPDATING" = 0 ] && exit 0 # first-run download failed: nothing to launch
+  fi
 fi
 
 # 2. Register login autostart, once.
