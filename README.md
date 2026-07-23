@@ -4,6 +4,9 @@ A traffic light for [Claude Code](https://claude.com/claude-code) in your
 system tray / menu bar — visible from **any** window, on macOS, Windows, and
 Linux.
 
+**▶ [See the live demo →](https://claude-semaphore.vercel.app/#demo)** — watch
+the tray states animate (red beats like a heart, orange breathes).
+
 Ever give Claude a task, switch to another window, and come back hoping it's
 done — only to find it's been sitting there waiting for your permission?
 Claude Semaphore tells you at a glance:
